@@ -1,0 +1,16 @@
+{
+    "name": "Dragonpunk",
+    "rootNamespace": "",
+    "references": [
+        "GUID:5ae7f4cd6a0f7394aada5959cd7f53a6"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
