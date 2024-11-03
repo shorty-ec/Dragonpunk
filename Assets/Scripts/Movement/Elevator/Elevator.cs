@@ -30,8 +30,12 @@ public class Elevator : MonoBehaviour
     {
         if (other.CompareTag("Player"))
         {
-            
-            other.transform.SetParent(null, true);
+            NodeManager nodeManager = other.GetComponent<NodeManager>();
+            if (nodeManager != null)
+            {
+                nodeManager.ExitElevator();
+                other.transform.SetParent(transform, true);
+            }
         }
     }
 

@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
 
 public class NodeManager : MonoBehaviour
 {
@@ -19,11 +20,15 @@ public class NodeManager : MonoBehaviour
     private KeyCode oppositeKey;      // The opposite key for going back to the previous node
     private float holdDuration = 0f;  // How long the player has been holding a key
     private Elevator _elevator;
+    private bool _currentlyMovingElevator;
+    private bool _currentlyInElevator;
 
     [SerializeField] SpriteRenderer sprite;
     [SerializeField] Animator animator;
     [SerializeField] float forgivenessMargin = 0.1f;
     float lastPositionX;
+    bool isWalking;
+    [SerializeField] TextMeshProUGUI textMesh;
 
     void Start()
     {
@@ -33,11 +38,33 @@ public class NodeManager : MonoBehaviour
 
     void Update()
     {
+        if (_currentlyMovingElevator) return; //DO NOTHING IF CURRENTLY IN MOVING ELEVATOR
         // Detect input directly to update speed more responsively
-        float speed = Input.GetAxisRaw("Horizontal") * moveSpeed;
+        float speed = Input.GetAxisRaw("Horizontal");
+        // Flip sprite based on movement direction
+        if (speed < 0)
+        {
+            sprite.flipX = false;  // Moving left
+        }
+        else if (speed > 0)
+        {
+            sprite.flipX = true; // Moving right
+        }
 
-        // Update the 'Speed' parameter in the animator to make it more responsive
-        animator.SetFloat("Speed", Mathf.Abs(speed));
+        if (isWalking)
+        {
+            animator.SetFloat("Speed", Mathf.Abs(1f));
+        }
+        else
+        {
+            animator.SetFloat("Speed", Mathf.Abs(0f));
+        }
+
+
+
+        // Update last position to reflect current frame
+        lastPositionX = transform.position.x;
+
         // Handle state logic for node movement
         switch (currentState)
         {
@@ -48,7 +75,7 @@ public class NodeManager : MonoBehaviour
                 HandleInput();
                 break;
             case PlayerState.Elevator:
-                MoveWithElevator();
+                HandleInput();
                 break;
             case PlayerState.Movement:
                 MoveToTargetNode();
@@ -60,28 +87,30 @@ public class NodeManager : MonoBehaviour
 
 
 
-        // Flip sprite based on movement direction
-        if (speed < 0)
-        {
-            sprite.flipX = false;  // Moving left
-        }
-        else if (speed > 0)
-        {
-            sprite.flipX = true; // Moving right
-        }
-
-        // Update last position to reflect current frame
-        lastPositionX = transform.position.x;
+        
     }
 
     // Method to enter a node's trigger and switch to Pending State
     public void EnterNode(Node node)
     {
         currentNode = node;
-        currentState = PlayerState.NodePending;
+
+        if (!_currentlyInElevator)
+            currentState = PlayerState.NodePending;
+        else
+            currentState = PlayerState.Elevator;
 
         currentlyCollidedNode = node;
 
+        Dictionary<KeyCode, Node> connections = currentlyCollidedNode.GetConnectionsDictionary();
+        string inputAction = "Movement Options";
+        foreach (var entry in connections)
+        {
+            KeyCode key = entry.Key;
+            inputAction += key.ToString()+" ";
+        }
+        _currentlyMovingElevator = false;
+        textMesh.SetText(inputAction);
         // Ensure we only reset previousNode to null when it's the initial node
         //if (previousNode == null)
         //{
@@ -107,7 +136,7 @@ public class NodeManager : MonoBehaviour
         if (Vector3.Distance(transform.position, currentNode.transform.position) < 0.1f)
         {
             currentState = PlayerState.NodeOpen;
-            Debug.Log("Entered Node Open State");
+            //Debug.Log("Entered Node Open State");
         }
     }
 
@@ -119,13 +148,25 @@ public class NodeManager : MonoBehaviour
             KeyCode key = entry.Key;
             if (Input.GetKey(key))
             {
-                Debug.Log("Attempt" + key.ToString());
+                //Debug.Log("Attempt" + key.ToString());
                 holdDuration += Time.deltaTime;
 
                 if (holdDuration >= holdTime)
                 {
-                    Debug.Log("success" + key.ToString());
-                    SetTargetNode(entry.Value, key);
+                    if (entry.Value.isLocked())
+                        continue;
+                    //Debug.Log("success" + key.ToString());
+                    //We found our next node
+
+                    // if we are in elevator state and we are going to an elevator node
+                    if (currentState == PlayerState.Elevator && currentlyCollidedNode.nodeConnections.Find(x => x.connectedNode == entry.Value).isElevatorNode)
+                    {
+                        MoveWithElevator(entry.Value);
+                    }
+                    else
+                    {
+                        SetTargetNode(entry.Value, key);
+                    }
                     return;
                 }
             }
@@ -149,23 +190,30 @@ public class NodeManager : MonoBehaviour
 
         currentState = PlayerState.Movement;
         holdDuration = 0f;
-        Debug.Log("Entered Movement State");
+        //Debug.Log("Entered Movement State");
     }
-    private void MoveWithElevator()
+    private void MoveWithElevator(Node target_node)
     {
-        /*if (Input.GetKeyDown(KeyCode.Space))
-        {
-            _elevator.Move(currentlyCollidedNode.GetElevatorNodes()[0].transform.position);
-        }*/
+        targetNode = target_node;
+        //currentKey = key;
+        oppositeKey = GetOppositeKey(currentKey);
+        previousNode = currentNode;
+        holdDuration = 0f;
 
-        //Grab possible elevator nodes, decide which ones should be which inputs
-        //If that input is pressed, move the elevator to that node with _elevator.Move()
+        _elevator.Move(target_node.transform.position);
         //also disable movement temporarily while the elevator moves
+        _currentlyMovingElevator = true;
     }
     public void SetElevator(Elevator elevator)
     {
+        _currentlyInElevator = true;
         _elevator = elevator;
         currentState = PlayerState.Elevator;
+    }
+
+    public void ExitElevator()
+    {
+        _currentlyInElevator = false;
     }
 
 
@@ -173,6 +221,7 @@ public class NodeManager : MonoBehaviour
     {
         if (Input.GetKey(currentKey))
         {
+            isWalking = true;
             Vector3 directionToTarget = (targetNode.transform.position - transform.position).normalized;
             transform.position += directionToTarget * moveSpeed * Time.deltaTime;
 
@@ -183,6 +232,7 @@ public class NodeManager : MonoBehaviour
         }
         else if (Input.GetKey(oppositeKey) && previousNode != null)
         {
+            isWalking = true;
             Vector3 directionToPrevious = (previousNode.transform.position - transform.position).normalized;
             transform.position += directionToPrevious * moveSpeed * Time.deltaTime;
 
@@ -191,12 +241,21 @@ public class NodeManager : MonoBehaviour
                 EnterNode(previousNode);  // Enter the previous node
             }
         }
+        else
+        {
+            isWalking = false;
+        }
     }
 
     private KeyCode GetOppositeKey(KeyCode key)
     {
         switch (key)
         {
+            case KeyCode.W: return KeyCode.S;
+            case KeyCode.S: return KeyCode.W;
+            case KeyCode.A: return KeyCode.D;
+            case KeyCode.D: return KeyCode.A;
+            /*3D
             case KeyCode.W: return KeyCode.X;
             case KeyCode.X: return KeyCode.W;
             case KeyCode.A: return KeyCode.D;
@@ -204,7 +263,7 @@ public class NodeManager : MonoBehaviour
             case KeyCode.E: return KeyCode.Z;
             case KeyCode.Z: return KeyCode.E;
             case KeyCode.Q: return KeyCode.C;
-            case KeyCode.C: return KeyCode.Q;
+            case KeyCode.C: return KeyCode.Q;*/
             default: return key;  // If no opposite, return the same key
         }
     }

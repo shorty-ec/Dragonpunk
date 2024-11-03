@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 public class Node : MonoBehaviour
 {
+    [SerializeField] private bool _isLocked;
+
     [Serializable]
     public class NodeConnection
     {
@@ -48,6 +50,7 @@ public class Node : MonoBehaviour
             if (!connections.ContainsKey(connection.key))
             {
                 connections.Add(connection.key, connection.connectedNode);
+
             }
         }
         return connections;
@@ -76,5 +79,16 @@ public class Node : MonoBehaviour
             }
         }
     }
+
+    public bool isLocked()
+    {
+        return _isLocked;
+    }
+
+    public void SetLocked(bool value)
+    {
+        _isLocked = value;
+    }
+     
 }
 
